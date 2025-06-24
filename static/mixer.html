@@ -267,6 +267,11 @@
       // Load saved state from localStorage if available
       function loadFromLocalStorage() {
         try {
+          // Clear existing groups first
+          groups = [];
+          // Also clear DOM
+          document.getElementById("videos").innerHTML = "";
+
           const savedGroups = localStorage.getItem("youtubeAudioMixerGroups");
           if (savedGroups) {
             const parsedGroups = JSON.parse(savedGroups);
@@ -278,6 +283,7 @@
               tracks: g.tracks.map((t) => ({
                 id: t.id,
                 title: t.title,
+                element: null, // Initialize with null, will be set when rendered
               })),
             }));
 
@@ -291,7 +297,12 @@
               );
               if (tracksContainer) {
                 group.tracks.forEach((track) => {
-                  const trackElement = addTrack(track.id, track.title, group);
+                  const trackElement = addTrack(
+                    track.id,
+                    track.title,
+                    group,
+                    false,
+                  );
                   track.element = trackElement;
                 });
               }
@@ -323,6 +334,11 @@
             })),
           }));
 
+          // First clear existing data
+          localStorage.removeItem("youtubeAudioMixerGroups");
+          localStorage.removeItem("youtubeAudioMixerCurrentGroup");
+
+          // Then save fresh data
           localStorage.setItem(
             "youtubeAudioMixerGroups",
             JSON.stringify(groupsToSave),
@@ -333,8 +349,6 @@
               "youtubeAudioMixerCurrentGroup",
               currentGroup.id,
             );
-          } else {
-            localStorage.removeItem("youtubeAudioMixerCurrentGroup");
           }
         } catch (error) {
           console.error("Error saving to localStorage:", error);
@@ -595,7 +609,7 @@
         return tracksDiv;
       }
 
-      function addTrack(videoId, title, targetGroup = null) {
+      function addTrack(videoId, title, targetGroup = null, saveState = true) {
         // Create track element
         const trackDiv = document.createElement("div");
         trackDiv.classList.add("track");
@@ -708,20 +722,32 @@
           container = document.querySelector(
             `#${targetGroup.id} .group-tracks`,
           );
-          targetGroup.tracks.push({
-            id: videoId,
-            title: title,
-            element: trackDiv,
-          });
+          // Check if this track is already in the group to prevent duplication
+          const existingTrack = targetGroup.tracks.find(
+            (t) => t.id === videoId,
+          );
+          if (!existingTrack) {
+            targetGroup.tracks.push({
+              id: videoId,
+              title: title,
+              element: trackDiv,
+            });
+          }
         } else if (currentGroup) {
           container = document.querySelector(
             `#${currentGroup.id} .group-tracks`,
           );
-          currentGroup.tracks.push({
-            id: videoId,
-            title: title,
-            element: trackDiv,
-          });
+          // Check if this track is already in the group to prevent duplication
+          const existingTrack = currentGroup.tracks.find(
+            (t) => t.id === videoId,
+          );
+          if (!existingTrack) {
+            currentGroup.tracks.push({
+              id: videoId,
+              title: title,
+              element: trackDiv,
+            });
+          }
         } else {
           container = document.getElementById("videos");
         }
@@ -742,8 +768,10 @@
 
         container.appendChild(trackDiv);
 
-        // Save to localStorage
-        saveToLocalStorage();
+        // Only save to localStorage if saveState is true
+        if (saveState) {
+          saveToLocalStorage();
+        }
 
         return trackDiv;
       }
