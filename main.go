@@ -40,6 +40,16 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Print startup banner
+	fmt.Println("╔═══════════════════════════════════════════╗")
+	fmt.Println("║       Discord Audio Bridge                ║")
+	fmt.Printf("║       Version: %-26s ║\n", version)
+	fmt.Println("╠═══════════════════════════════════════════╣")
+	fmt.Println("║  Web UI:     http://localhost:8080        ║")
+	fmt.Println("║  Mixer:      http://localhost:8080/mixer  ║")
+	fmt.Println("╚═══════════════════════════════════════════╝")
+	fmt.Println()
+
 	// Load environment variables from .env file
 	err := godotenv.Load()
 	if err != nil {

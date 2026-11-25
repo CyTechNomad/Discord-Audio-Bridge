@@ -57,6 +57,8 @@ jobs:
             cp .env.example "${dir}/.env"
             cp -r static "${dir}/"
             cp README.md "${dir}/"
+            cp start.sh "${dir}/"
+            chmod +x "${dir}/start.sh"
             tar -czvf "dist/${dir}.tar.gz" "${dir}"
           done
 
@@ -67,6 +69,7 @@ jobs:
           cp .env.example "${dir}/.env"
           cp -r static "${dir}/"
           cp README.md "${dir}/"
+          cp start.bat "${dir}/"
           zip -r "dist/${dir}.zip" "${dir}"
 
       - name: Create Release
