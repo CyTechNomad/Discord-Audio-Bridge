@@ -56,6 +56,29 @@ func main() {
 		log.Printf("Warning: Error loading .env file: %v", err)
 		log.Println("Continuing with existing environment variables...")
 	}
+
+	// Validate required environment variables
+	missingVars := []string{}
+	if os.Getenv("DISCORD_BOT_TOKEN") == "" {
+		missingVars = append(missingVars, "DISCORD_BOT_TOKEN")
+	}
+	if os.Getenv("DISCORD_GUILD_ID") == "" {
+		missingVars = append(missingVars, "DISCORD_GUILD_ID")
+	}
+	if os.Getenv("DISCORD_CHANNEL_ID") == "" {
+		missingVars = append(missingVars, "DISCORD_CHANNEL_ID")
+	}
+	if len(missingVars) > 0 {
+		log.Println("ERROR: Missing required environment variables:")
+		for _, v := range missingVars {
+			log.Printf("  - %s", v)
+		}
+		log.Println("\nPlease edit your .env file and add the missing values.")
+		log.Println("Press Enter to exit...")
+		fmt.Scanln()
+		os.Exit(1)
+	}
+
 	cancelChan := make(chan os.Signal, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 

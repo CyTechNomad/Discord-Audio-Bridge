@@ -42,8 +42,29 @@ jobs:
           # macOS ARM64 (Apple Silicon)
           GOOS=darwin GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/discord-audio-bridge-darwin-arm64
 
-          # Windows AMD64
+          # Windows AMD64 - with version info embedded
+          go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
+
+          # Parse version (strip 'v' prefix, default to 1.0.0)
+          VERSION_NUM=${VERSION#v}
+          MAJOR=$(echo $VERSION_NUM | cut -d. -f1)
+          MINOR=$(echo $VERSION_NUM | cut -d. -f2)
+          PATCH=$(echo $VERSION_NUM | cut -d. -f3)
+
+          # Update versioninfo.json with actual version
+          sed -i "s/\"Major\": 0/\"Major\": ${MAJOR:-1}/g" versioninfo.json
+          sed -i "s/\"Minor\": 0/\"Minor\": ${MINOR:-0}/g" versioninfo.json
+          sed -i "s/\"Patch\": 0/\"Patch\": ${PATCH:-0}/g" versioninfo.json
+          sed -i "s/\"FileVersion\": \"\"/\"FileVersion\": \"${VERSION}\"/g" versioninfo.json
+          sed -i "s/\"ProductVersion\": \"\"/\"ProductVersion\": \"${VERSION}\"/g" versioninfo.json
+
+          # Generate resource.syso
+          goversioninfo -o resource.syso versioninfo.json
+
           GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/discord-audio-bridge-windows-amd64.exe
+
+          # Clean up
+          rm -f resource.syso
 
       - name: Create archives
         run: |
