@@ -39,7 +39,26 @@ cp .env.example .env
 | `DISCORD_CHANNEL_ID` | Voice channel ID | Yes |
 | `YOUTUBE_API_KEY` | YouTube Data API key | No |
 
+## Download
+
+Pre-built binaries are available on the [Releases](https://github.com/CyTechNomad/discord-audio-bridge/releases) page.
+
+Each release includes:
+- Binary for your platform
+- `.env` file (edit with your Discord credentials)
+- `static/` folder (web interface)
+- Launcher script (`start.sh` or `start.bat`)
+
 ## Installation
+
+### From Release (Recommended)
+
+1. Download the archive for your platform from [Releases](https://github.com/CyTechNomad/discord-audio-bridge/releases)
+2. Extract the archive
+3. Edit `.env` with your Discord bot token and channel IDs
+4. Run `start.sh` (Linux/macOS) or `start.bat` (Windows)
+
+### From Source
 
 1. Clone the repository:
 
