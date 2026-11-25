@@ -45,16 +45,27 @@ jobs:
 
       - name: Create archives
         run: |
-          cd dist
+          VERSION=${{ steps.version.outputs.VERSION }}
 
-          # Create tar.gz for Unix platforms
-          tar -czvf discord-audio-bridge-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz discord-audio-bridge-linux-amd64
-          tar -czvf discord-audio-bridge-${{ steps.version.outputs.VERSION }}-linux-arm64.tar.gz discord-audio-bridge-linux-arm64
-          tar -czvf discord-audio-bridge-${{ steps.version.outputs.VERSION }}-darwin-amd64.tar.gz discord-audio-bridge-darwin-amd64
-          tar -czvf discord-audio-bridge-${{ steps.version.outputs.VERSION }}-darwin-arm64.tar.gz discord-audio-bridge-darwin-arm64
+          # Create release directories with all required files
+          for platform in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do
+            dir="discord-audio-bridge-${VERSION}-${platform}"
+            mkdir -p "${dir}"
+            cp "dist/discord-audio-bridge-${platform}" "${dir}/discord-audio-bridge"
+            cp .env.example "${dir}/.env"
+            cp -r static "${dir}/"
+            cp README.md "${dir}/"
+            tar -czvf "dist/${dir}.tar.gz" "${dir}"
+          done
 
-          # Create zip for Windows
-          zip discord-audio-bridge-${{ steps.version.outputs.VERSION }}-windows-amd64.zip discord-audio-bridge-windows-amd64.exe
+          # Windows
+          dir="discord-audio-bridge-${VERSION}-windows-amd64"
+          mkdir -p "${dir}"
+          cp dist/discord-audio-bridge-windows-amd64.exe "${dir}/discord-audio-bridge.exe"
+          cp .env.example "${dir}/.env"
+          cp -r static "${dir}/"
+          cp README.md "${dir}/"
+          zip -r "dist/${dir}.zip" "${dir}"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
