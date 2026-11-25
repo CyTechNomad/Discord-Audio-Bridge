@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-FileCopyrightText: 2026 The Pion community <https://pion.ly>
 // SPDX-License-Identifier: MIT
 
 package sctp
@@ -40,11 +40,16 @@ func (q *queue[T]) PopFront() T {
 	q.buf[q.head] = zeroVal
 	q.head = (q.head + 1) % len(q.buf)
 	q.count--
+
 	return ele
 }
 
 func (q *queue[T]) Front() T {
 	return q.buf[q.head]
+}
+
+func (q *queue[T]) Back() T {
+	return q.buf[(q.tail-1+len(q.buf))%len(q.buf)]
 }
 
 func (q *queue[T]) At(i int) T {

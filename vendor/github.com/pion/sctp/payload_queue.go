@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-FileCopyrightText: 2026 The Pion community <https://pion.ly>
 // SPDX-License-Identifier: MIT
 
 package sctp
@@ -22,6 +22,7 @@ func (q *payloadQueue) pop(tsn uint32) (*chunkPayloadData, bool) {
 	if q.chunks.Len() > 0 && tsn == q.chunks.Front().tsn {
 		c := q.chunks.PopFront()
 		q.nBytes -= len(c.userData)
+
 		return c, true
 	}
 
@@ -34,11 +35,13 @@ func (q *payloadQueue) get(tsn uint32) (*chunkPayloadData, bool) {
 	if length == 0 {
 		return nil, false
 	}
-	head := q.chunks.Front().tsn
-	if tsn < head || int(tsn-head) >= length {
+
+	offset := tsn - q.chunks.Front().tsn
+	if int64(offset) >= int64(length) {
 		return nil, false
 	}
-	return q.chunks.At(int(tsn - head)), true
+
+	return q.chunks.At(int(offset)), true
 }
 
 func (q *payloadQueue) markAsAcked(tsn uint32) int {
@@ -70,4 +73,14 @@ func (q *payloadQueue) getNumBytes() int {
 
 func (q *payloadQueue) size() int {
 	return q.chunks.Len()
+}
+
+func (q *payloadQueue) earliestOutstanding() *chunkPayloadData {
+	for i := 0; i < q.chunks.Len(); i++ {
+		if c := q.chunks.At(i); !c.acked {
+			return c
+		}
+	}
+
+	return nil
 }

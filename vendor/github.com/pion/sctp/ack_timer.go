@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-FileCopyrightText: 2026 The Pion community <https://pion.ly>
 // SPDX-License-Identifier: MIT
 
 package sctp
@@ -9,11 +9,10 @@ import (
 	"time"
 )
 
-const (
-	ackInterval time.Duration = 200 * time.Millisecond
-)
+// RFC 9260 sections 6.2 and 16: SACK.Delay defaults to 200 ms and must not exceed 500 ms.
+const ackInterval time.Duration = 200 * time.Millisecond
 
-// ackTimerObserver is the inteface to an ack timer observer.
+// ackTimerObserver is the interface to an ack timer observer.
 type ackTimerObserver interface {
 	onAckTimeout()
 }
@@ -26,7 +25,7 @@ const (
 	ackTimerClosed
 )
 
-// ackTimer provides the retnransmission timer conforms with RFC 4960 Sec 6.3.1
+// ackTimer implements delayed acknowledgements according to RFC 9260 section 6.2.
 type ackTimer struct {
 	timer    *time.Timer
 	observer ackTimerObserver
@@ -40,6 +39,7 @@ func newAckTimer(observer ackTimerObserver) *ackTimer {
 	t := &ackTimer{observer: observer}
 	t.timer = time.AfterFunc(math.MaxInt64, t.timeout)
 	t.timer.Stop()
+
 	return t
 }
 
@@ -65,11 +65,11 @@ func (t *ackTimer) start() bool {
 	t.state = ackTimerStarted
 	t.pending++
 	t.timer.Reset(ackInterval)
+
 	return true
 }
 
-// stops the timer. this is similar to stop() but subsequent start() call
-// will fail (the timer is no longer usable)
+// stop stops the timer and keeps it reusable.
 func (t *ackTimer) stop() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
@@ -83,7 +83,7 @@ func (t *ackTimer) stop() {
 }
 
 // closes the timer. this is similar to stop() but subsequent start() call
-// will fail (the timer is no longer usable)
+// will fail (the timer is no longer usable).
 func (t *ackTimer) close() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
@@ -92,13 +92,4 @@ func (t *ackTimer) close() {
 		t.pending--
 	}
 	t.state = ackTimerClosed
-}
-
-// isRunning tests if the timer is running.
-// Debug purpose only
-func (t *ackTimer) isRunning() bool {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
-
-	return t.state == ackTimerStarted
 }

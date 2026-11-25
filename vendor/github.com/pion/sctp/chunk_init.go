@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-FileCopyrightText: 2026 The Pion community <https://pion.ly>
 // SPDX-License-Identifier: MIT
 
 package sctp // nolint:dupl
@@ -21,23 +21,24 @@ See chunkInitCommon for the fixed headers
 	Reserved for ECN Capable (Note 2)   Optional    32768 (0x8000)
 	Host Name IP (Note 3)          		Optional    11
 	Supported IP Types (Note 4)    		Optional    12
+	Zero Checksum Acceptable (RFC 9653) Optional    32769 (0x8001)
 */
 type chunkInit struct {
 	chunkHeader
 	chunkInitCommon
 }
 
-// Init chunk errors
+// Init chunk errors.
 var (
 	ErrChunkTypeNotTypeInit          = errors.New("ChunkType is not of type INIT")
 	ErrChunkValueNotLongEnough       = errors.New("chunk Value isn't long enough for mandatory parameters exp")
 	ErrChunkTypeInitFlagZero         = errors.New("ChunkType of type INIT flags must be all 0")
 	ErrChunkTypeInitUnmarshalFailed  = errors.New("failed to unmarshal INIT body")
 	ErrChunkTypeInitMarshalFailed    = errors.New("failed marshaling INIT common data")
-	ErrChunkTypeInitInitateTagZero   = errors.New("ChunkType of type INIT ACK InitiateTag must not be 0")
-	ErrInitInboundStreamRequestZero  = errors.New("INIT ACK inbound stream request must be > 0")
-	ErrInitOutboundStreamRequestZero = errors.New("INIT ACK outbound stream request must be > 0")
-	ErrInitAdvertisedReceiver1500    = errors.New("INIT ACK Advertised Receiver Window Credit (a_rwnd) must be >= 1500")
+	ErrChunkTypeInitInitateTagZero   = errors.New("ChunkType of type INIT InitiateTag must not be 0")
+	ErrInitInboundStreamRequestZero  = errors.New("INIT inbound stream request must be > 0")
+	ErrInitOutboundStreamRequestZero = errors.New("INIT outbound stream request must be > 0")
+	ErrInitAdvertisedReceiver1500    = errors.New("INIT Advertised Receiver Window Credit (a_rwnd) must be >= 1500")
 	ErrInitUnknownParam              = errors.New("INIT with unknown param")
 )
 
@@ -74,6 +75,7 @@ func (i *chunkInit) marshal() ([]byte, error) {
 
 	i.chunkHeader.typ = ctInit
 	i.chunkHeader.raw = initShared
+
 	return i.chunkHeader.marshal()
 }
 
@@ -136,7 +138,7 @@ func (i *chunkInit) check() (abort bool, err error) {
 	return false, nil
 }
 
-// String makes chunkInit printable
+// String makes chunkInit printable.
 func (i *chunkInit) String() string {
 	return fmt.Sprintf("%s\n%s", i.chunkHeader, i.chunkInitCommon)
 }

@@ -1,18 +1,29 @@
-// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-FileCopyrightText: 2026 The Pion community <https://pion.ly>
 // SPDX-License-Identifier: MIT
 
 package rtp
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
 )
 
+/*
+  RFC 3550, RTP Header Extension:
+
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |      defined by profile       |           length              |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                        header extension                       |
+   |                             ....                              |
+*/
+
 const (
-	headerExtensionProfileOneByte = 0xBEDE
-	headerExtensionProfileTwoByte = 0x1000
-	headerExtensionIDReserved     = 0xF
+	headerExtensionIDReserved = 0xF
 )
 
 // HeaderExtension represents an RTP extension header.
@@ -35,16 +46,14 @@ type OneByteHeaderExtension struct {
 
 // Set sets the extension payload for the specified ID.
 func (e *OneByteHeaderExtension) Set(id uint8, buf []byte) error {
-	if id < 1 || id > 14 {
-		return fmt.Errorf("%w actual(%d)", errRFC8285OneByteHeaderIDRange, id)
-	}
-	if len(buf) > 16 {
-		return fmt.Errorf("%w actual(%d)", errRFC8285OneByteHeaderSize, len(buf))
+	if err := headerExtensionCheck(ExtensionProfileOneByte, id, buf); err != nil {
+		return err
 	}
 
 	for n := 4; n < len(e.payload); {
 		if e.payload[n] == 0x00 { // padding
 			n++
+
 			continue
 		}
 
@@ -52,24 +61,39 @@ func (e *OneByteHeaderExtension) Set(id uint8, buf []byte) error {
 		payloadLen := int(e.payload[n]&^0xF0 + 1)
 		n++
 
+		if n+payloadLen > len(e.payload) {
+			break
+		}
+
 		if extid == id {
-			e.payload = append(e.payload[:n+1], append(buf, e.payload[n+1+payloadLen:]...)...)
+			e.payload = append(e.payload[:n], append(buf, e.payload[n+payloadLen:]...)...)
+
 			return nil
 		}
 		n += payloadLen
 	}
-	e.payload = append(e.payload, (id<<4 | uint8(len(buf)-1)))
+
+	if len(e.payload) == 0 && !bytes.HasPrefix(buf, []byte{0xBE, 0xDE, 0x00, 0x00}) {
+		e.payload = []byte{0xBE, 0xDE, 0x00, 0x00}
+	}
+
+	e.payload = append(e.payload, (id<<4 | uint8(len(buf)-1))) // nolint: gosec // G115
 	e.payload = append(e.payload, buf...)
 	binary.BigEndian.PutUint16(e.payload[2:4], binary.BigEndian.Uint16(e.payload[2:4])+1)
+
 	return nil
 }
 
 // GetIDs returns the available IDs.
 func (e *OneByteHeaderExtension) GetIDs() []uint8 {
+	if len(e.payload) < 4 {
+		return nil
+	}
 	ids := make([]uint8, 0, binary.BigEndian.Uint16(e.payload[2:4]))
 	for n := 4; n < len(e.payload); {
 		if e.payload[n] == 0x00 { // padding
 			n++
+
 			continue
 		}
 
@@ -81,9 +105,14 @@ func (e *OneByteHeaderExtension) GetIDs() []uint8 {
 			break
 		}
 
+		if n+payloadLen > len(e.payload) {
+			break
+		}
+
 		ids = append(ids, extid)
 		n += payloadLen
 	}
+
 	return ids
 }
 
@@ -92,6 +121,7 @@ func (e *OneByteHeaderExtension) Get(id uint8) []byte {
 	for n := 4; n < len(e.payload); {
 		if e.payload[n] == 0x00 { // padding
 			n++
+
 			continue
 		}
 
@@ -99,11 +129,16 @@ func (e *OneByteHeaderExtension) Get(id uint8) []byte {
 		payloadLen := int(e.payload[n]&^0xF0 + 1)
 		n++
 
+		if n+payloadLen > len(e.payload) {
+			break
+		}
+
 		if extid == id {
 			return e.payload[n : n+payloadLen]
 		}
 		n += payloadLen
 	}
+
 	return nil
 }
 
@@ -112,28 +147,43 @@ func (e *OneByteHeaderExtension) Del(id uint8) error {
 	for n := 4; n < len(e.payload); {
 		if e.payload[n] == 0x00 { // padding
 			n++
+
 			continue
 		}
 
 		extid := e.payload[n] >> 4
 		payloadLen := int(e.payload[n]&^0xF0 + 1)
 
+		if n+1+payloadLen > len(e.payload) {
+			break
+		}
+
 		if extid == id {
 			e.payload = append(e.payload[:n], e.payload[n+1+payloadLen:]...)
+
 			return nil
 		}
 		n += payloadLen + 1
 	}
+
 	return errHeaderExtensionNotFound
 }
 
 // Unmarshal parses the extension payload.
 func (e *OneByteHeaderExtension) Unmarshal(buf []byte) (int, error) {
+	if len(buf) < 4 {
+		return 0, errTooSmall
+	}
 	profile := binary.BigEndian.Uint16(buf[0:2])
-	if profile != headerExtensionProfileOneByte {
+	if profile != ExtensionProfileOneByte {
 		return 0, fmt.Errorf("%w actual(%x)", errHeaderExtensionNotFound, buf[0:2])
 	}
+	extLen := binary.BigEndian.Uint16(buf[2:4])
+	if len(buf) < 4+int(extLen)*4 {
+		return 0, errTooSmall
+	}
 	e.payload = buf
+
 	return len(buf), nil
 }
 
@@ -148,6 +198,7 @@ func (e OneByteHeaderExtension) MarshalTo(buf []byte) (int, error) {
 	if size > len(buf) {
 		return 0, io.ErrShortBuffer
 	}
+
 	return copy(buf, e.payload), nil
 }
 
@@ -163,55 +214,81 @@ type TwoByteHeaderExtension struct {
 
 // Set sets the extension payload for the specified ID.
 func (e *TwoByteHeaderExtension) Set(id uint8, buf []byte) error {
-	if id < 1 || id > 255 {
-		return fmt.Errorf("%w actual(%d)", errRFC8285TwoByteHeaderIDRange, id)
-	}
-	if len(buf) > 255 {
-		return fmt.Errorf("%w actual(%d)", errRFC8285TwoByteHeaderSize, len(buf))
+	if err := headerExtensionCheck(ExtensionProfileTwoByte, id, buf); err != nil {
+		return err
 	}
 
 	for n := 4; n < len(e.payload); {
 		if e.payload[n] == 0x00 { // padding
 			n++
+
 			continue
 		}
 
 		extid := e.payload[n]
 		n++
 
+		if n >= len(e.payload) {
+			break
+		}
+
 		payloadLen := int(e.payload[n])
 		n++
 
+		if n+payloadLen > len(e.payload) {
+			break
+		}
+
 		if extid == id {
-			e.payload = append(e.payload[:n+2], append(buf, e.payload[n+2+payloadLen:]...)...)
+			e.payload = append(e.payload[:n], append(buf, e.payload[n+payloadLen:]...)...)
+
 			return nil
 		}
 		n += payloadLen
 	}
-	e.payload = append(e.payload, id, uint8(len(buf)))
+
+	if len(e.payload) == 0 && !bytes.HasPrefix(buf, []byte{0x10, 0x00, 0x00, 0x00}) {
+		e.payload = []byte{0x10, 0x00, 0x00, 0x00}
+	}
+
+	e.payload = append(e.payload, id, uint8(len(buf))) // nolint: gosec // G115
 	e.payload = append(e.payload, buf...)
 	binary.BigEndian.PutUint16(e.payload[2:4], binary.BigEndian.Uint16(e.payload[2:4])+1)
+
 	return nil
 }
 
 // GetIDs returns the available IDs.
 func (e *TwoByteHeaderExtension) GetIDs() []uint8 {
+	if len(e.payload) < 4 {
+		return nil
+	}
 	ids := make([]uint8, 0, binary.BigEndian.Uint16(e.payload[2:4]))
 	for n := 4; n < len(e.payload); {
 		if e.payload[n] == 0x00 { // padding
 			n++
+
 			continue
 		}
 
 		extid := e.payload[n]
 		n++
 
+		if n >= len(e.payload) {
+			break
+		}
+
 		payloadLen := int(e.payload[n])
 		n++
+
+		if n+payloadLen > len(e.payload) {
+			break
+		}
 
 		ids = append(ids, extid)
 		n += payloadLen
 	}
+
 	return ids
 }
 
@@ -220,20 +297,30 @@ func (e *TwoByteHeaderExtension) Get(id uint8) []byte {
 	for n := 4; n < len(e.payload); {
 		if e.payload[n] == 0x00 { // padding
 			n++
+
 			continue
 		}
 
 		extid := e.payload[n]
 		n++
 
+		if n >= len(e.payload) {
+			break
+		}
+
 		payloadLen := int(e.payload[n])
 		n++
+
+		if n+payloadLen > len(e.payload) {
+			break
+		}
 
 		if extid == id {
 			return e.payload[n : n+payloadLen]
 		}
 		n += payloadLen
 	}
+
 	return nil
 }
 
@@ -242,29 +329,48 @@ func (e *TwoByteHeaderExtension) Del(id uint8) error {
 	for n := 4; n < len(e.payload); {
 		if e.payload[n] == 0x00 { // padding
 			n++
+
 			continue
 		}
 
 		extid := e.payload[n]
 
+		if n+1 >= len(e.payload) {
+			break
+		}
+
 		payloadLen := int(e.payload[n+1])
+
+		if n+2+payloadLen > len(e.payload) {
+			break
+		}
 
 		if extid == id {
 			e.payload = append(e.payload[:n], e.payload[n+2+payloadLen:]...)
+
 			return nil
 		}
 		n += payloadLen + 2
 	}
+
 	return errHeaderExtensionNotFound
 }
 
 // Unmarshal parses the extension payload.
 func (e *TwoByteHeaderExtension) Unmarshal(buf []byte) (int, error) {
+	if len(buf) < 4 {
+		return 0, errTooSmall
+	}
 	profile := binary.BigEndian.Uint16(buf[0:2])
-	if profile != headerExtensionProfileTwoByte {
+	if profile != ExtensionProfileTwoByte {
 		return 0, fmt.Errorf("%w actual(%x)", errHeaderExtensionNotFound, buf[0:2])
 	}
+	extLen := binary.BigEndian.Uint16(buf[2:4])
+	if len(buf) < 4+int(extLen)*4 {
+		return 0, errTooSmall
+	}
 	e.payload = buf
+
 	return len(buf), nil
 }
 
@@ -279,6 +385,7 @@ func (e TwoByteHeaderExtension) MarshalTo(buf []byte) (int, error) {
 	if size > len(buf) {
 		return 0, io.ErrShortBuffer
 	}
+
 	return copy(buf, e.payload), nil
 }
 
@@ -294,10 +401,12 @@ type RawExtension struct {
 
 // Set sets the extension payload for the specified ID.
 func (e *RawExtension) Set(id uint8, payload []byte) error {
-	if id != 0 {
-		return fmt.Errorf("%w actual(%d)", errRFC3550HeaderIDRange, id)
+	if err := headerExtensionCheck(0, id, payload); err != nil {
+		return err
 	}
+
 	e.payload = payload
+
 	return nil
 }
 
@@ -311,6 +420,7 @@ func (e *RawExtension) Get(id uint8) []byte {
 	if id == 0 {
 		return e.payload
 	}
+
 	return nil
 }
 
@@ -318,18 +428,28 @@ func (e *RawExtension) Get(id uint8) []byte {
 func (e *RawExtension) Del(id uint8) error {
 	if id == 0 {
 		e.payload = nil
+
 		return nil
 	}
+
 	return fmt.Errorf("%w actual(%d)", errRFC3550HeaderIDRange, id)
 }
 
 // Unmarshal parses the extension from the given buffer.
 func (e *RawExtension) Unmarshal(buf []byte) (int, error) {
+	if len(buf) < 4 {
+		return 0, errTooSmall
+	}
 	profile := binary.BigEndian.Uint16(buf[0:2])
-	if profile == headerExtensionProfileOneByte || profile == headerExtensionProfileTwoByte {
+	if profile == ExtensionProfileOneByte || profile == ExtensionProfileTwoByte {
 		return 0, fmt.Errorf("%w actual(%x)", errHeaderExtensionNotFound, buf[0:2])
 	}
+	extLen := binary.BigEndian.Uint16(buf[2:4])
+	if len(buf) < 4+int(extLen)*4 {
+		return 0, errTooSmall
+	}
 	e.payload = buf
+
 	return len(buf), nil
 }
 
@@ -344,10 +464,39 @@ func (e RawExtension) MarshalTo(buf []byte) (int, error) {
 	if size > len(buf) {
 		return 0, io.ErrShortBuffer
 	}
+
 	return copy(buf, e.payload), nil
 }
 
 // MarshalSize returns the size of the extension when marshaled.
 func (e RawExtension) MarshalSize() int {
 	return len(e.payload)
+}
+
+// Assert that id + value is valid for give Header Extension Profile.
+func headerExtensionCheck(extensionProfile uint16, id uint8, payload []byte) error {
+	switch extensionProfile {
+	// RFC 8285 RTP One Byte Header Extension
+	case ExtensionProfileOneByte:
+		if id < 1 || id > 14 {
+			return fmt.Errorf("%w actual(%d)", errRFC8285OneByteHeaderIDRange, id)
+		}
+		if len(payload) > 16 {
+			return fmt.Errorf("%w actual(%d)", errRFC8285OneByteHeaderSize, len(payload))
+		}
+	// RFC 8285 RTP Two Byte Header Extension
+	case ExtensionProfileTwoByte:
+		if id < 1 {
+			return fmt.Errorf("%w actual(%d)", errRFC8285TwoByteHeaderIDRange, id)
+		}
+		if len(payload) > 255 {
+			return fmt.Errorf("%w actual(%d)", errRFC8285TwoByteHeaderSize, len(payload))
+		}
+	default: // RFC3550 Extension
+		if id != 0 {
+			return fmt.Errorf("%w actual(%d)", errRFC3550HeaderIDRange, id)
+		}
+	}
+
+	return nil
 }

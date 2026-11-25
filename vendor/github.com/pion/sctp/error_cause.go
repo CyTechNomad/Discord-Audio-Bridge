@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-FileCopyrightText: 2026 The Pion community <https://pion.ly>
 // SPDX-License-Identifier: MIT
 
 package sctp
@@ -9,7 +9,7 @@ import (
 	"fmt"
 )
 
-// errorCauseCode is a cause code that appears in either a ERROR or ABORT chunk
+// errorCauseCode is a cause code that appears in either an ERROR or ABORT chunk (RFC 9260 section 3.3.10).
 type errorCauseCode uint16
 
 type errorCause interface {
@@ -21,36 +21,49 @@ type errorCause interface {
 	errorCauseCode() errorCauseCode
 }
 
-// Error and abort chunk errors
+// Errors for building/validating error causes.
 var (
-	ErrBuildErrorCaseHandle = errors.New("BuildErrorCause does not handle")
+	ErrBuildErrorCaseHandle = errors.New("buildErrorCause does not handle this cause code")
+	ErrCauseTooShort        = errors.New("error cause too short")
+	ErrCauseLengthInvalid   = errors.New("error cause length invalid")
 )
 
-// buildErrorCause delegates the building of a error cause from raw bytes to the correct structure
+// buildErrorCause delegates building an error cause from raw bytes to the correct structure.
 func buildErrorCause(raw []byte) (errorCause, error) {
-	var e errorCause
+	if len(raw) < 4 {
+		return nil, ErrCauseTooShort
+	}
+
+	clen := int(binary.BigEndian.Uint16(raw[2:]))
+	if clen < 4 || clen > len(raw) {
+		return nil, ErrCauseLengthInvalid
+	}
+
+	var errCause errorCause
 
 	c := errorCauseCode(binary.BigEndian.Uint16(raw[0:]))
 	switch c {
 	case invalidMandatoryParameter:
-		e = &errorCauseInvalidMandatoryParameter{}
+		errCause = &errorCauseInvalidMandatoryParameter{}
 	case unrecognizedChunkType:
-		e = &errorCauseUnrecognizedChunkType{}
+		errCause = &errorCauseUnrecognizedChunkType{}
 	case protocolViolation:
-		e = &errorCauseProtocolViolation{}
+		errCause = &errorCauseProtocolViolation{}
 	case userInitiatedAbort:
-		e = &errorCauseUserInitiatedAbort{}
+		errCause = &errorCauseUserInitiatedAbort{}
 	default:
-		return nil, fmt.Errorf("%w: %s", ErrBuildErrorCaseHandle, c.String())
+		// Unknown cause — treat as opaque TLV per RFC 9260 §3.2.1
+		errCause = &errorCauseHeader{}
 	}
 
-	if err := e.unmarshal(raw); err != nil {
+	if err := errCause.unmarshal(raw[:clen]); err != nil {
 		return nil, err
 	}
 
-	return e, nil
+	return errCause, nil
 }
 
+// RFC 9260 section 3.3.10 "Error Causes".
 const (
 	invalidStreamIdentifier                errorCauseCode = 1
 	missingMandatoryParameter              errorCauseCode = 2
@@ -67,7 +80,7 @@ const (
 	protocolViolation                      errorCauseCode = 13
 )
 
-func (e errorCauseCode) String() string {
+func (e errorCauseCode) String() string { //nolint:cyclop
 	switch e {
 	case invalidStreamIdentifier:
 		return "Invalid Stream Identifier"
@@ -76,9 +89,9 @@ func (e errorCauseCode) String() string {
 	case staleCookieError:
 		return "Stale Cookie Error"
 	case outOfResource:
-		return "Out Of Resource"
+		return "Out of Resource"
 	case unresolvableAddress:
-		return "Unresolvable IP"
+		return "Unresolvable Address"
 	case unrecognizedChunkType:
 		return "Unrecognized Chunk Type"
 	case invalidMandatoryParameter:
@@ -90,7 +103,7 @@ func (e errorCauseCode) String() string {
 	case cookieReceivedWhileShuttingDown:
 		return "Cookie Received While Shutting Down"
 	case restartOfAnAssociationWithNewAddresses:
-		return "Restart Of An Association With New Addresses"
+		return "Restart of an Association with New Addresses"
 	case userInitiatedAbort:
 		return "User Initiated Abort"
 	case protocolViolation:

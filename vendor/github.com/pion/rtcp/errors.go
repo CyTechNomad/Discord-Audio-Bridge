@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-FileCopyrightText: 2026 The Pion community <https://pion.ly>
 // SPDX-License-Identifier: MIT
 
 package rtcp
@@ -13,6 +13,7 @@ var (
 	errBadFirstPacket           = errors.New("rtcp: first packet in compound must be SR or RR")
 	errMissingCNAME             = errors.New("rtcp: compound missing SourceDescription with CNAME")
 	errPacketBeforeCNAME        = errors.New("rtcp: feedback packet seen before CNAME")
+	errTooManySSRCs             = errors.New("rtcp: too many SSRCs")
 	errTooManyReports           = errors.New("rtcp: too many reports")
 	errTooManyChunks            = errors.New("rtcp: too many chunks")
 	errTooManySources           = errors.New("rtcp: too many sources")
@@ -35,4 +36,8 @@ var (
 	errWrongChunkType           = errors.New("rtcp: wrong chunk type")
 	errBadStructMemberType      = errors.New("rtcp: struct contains unexpected member type")
 	errBadReadParameter         = errors.New("rtcp: cannot read into non-pointer")
+	errAppDefinedInvalidLength  = errors.New("rtcp: application defined type invalid length")
+	errAppDefinedDataTooLarge   = errors.New("rtcp: application defined data is too large")
+	errAppDefinedInvalidName    = errors.New("rtcp: application defined name must be 4 ASCII chars")
+	errPacketTooLarge           = errors.New("rtcp: packet is too large to fit in RTCP length field")
 )

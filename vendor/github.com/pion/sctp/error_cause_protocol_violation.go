@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-FileCopyrightText: 2026 The Pion community <https://pion.ly>
 // SPDX-License-Identifier: MIT
 
 package sctp
@@ -12,9 +12,9 @@ import (
 This error cause MAY be included in ABORT chunks that are sent
 because an SCTP endpoint detects a protocol violation of the peer
 that is not covered by the error causes described in Section 3.3.10.1
-to Section 3.3.10.12.  An implementation MAY provide additional
+to Section 3.3.10.12. An implementation MAY provide additional
 information specifying what kind of protocol violation has been
-detected.
+detected. (RFC 9260)
 
 	 0                   1                   2                   3
 	 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -30,19 +30,20 @@ type errorCauseProtocolViolation struct {
 	additionalInformation []byte
 }
 
-// Abort chunk errors
+// Abort chunk errors.
 var (
 	ErrProtocolViolationUnmarshal = errors.New("unable to unmarshal Protocol Violation error")
 )
 
 func (e *errorCauseProtocolViolation) marshal() ([]byte, error) {
+	e.code = protocolViolation
 	e.raw = e.additionalInformation
+
 	return e.errorCauseHeader.marshal()
 }
 
 func (e *errorCauseProtocolViolation) unmarshal(raw []byte) error {
-	err := e.errorCauseHeader.unmarshal(raw)
-	if err != nil {
+	if err := e.errorCauseHeader.unmarshal(raw); err != nil {
 		return fmt.Errorf("%w: %v", ErrProtocolViolationUnmarshal, err) //nolint:errorlint
 	}
 
@@ -51,7 +52,7 @@ func (e *errorCauseProtocolViolation) unmarshal(raw []byte) error {
 	return nil
 }
 
-// String makes errorCauseProtocolViolation printable
+// String makes errorCauseProtocolViolation printable.
 func (e *errorCauseProtocolViolation) String() string {
 	return fmt.Sprintf("%s: %s", e.errorCauseHeader, e.additionalInformation)
 }

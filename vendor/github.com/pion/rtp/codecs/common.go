@@ -1,16 +1,17 @@
-// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-FileCopyrightText: 2026 The Pion community <https://pion.ly>
 // SPDX-License-Identifier: MIT
 
 package codecs
 
-func min(a, b int) int {
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}
+
 	return b
 }
 
-// audioDepacketizer is a mixin for audio codec depacketizers
+// audioDepacketizer is a mixin for audio codec depacketizers.
 type audioDepacketizer struct{}
 
 func (d *audioDepacketizer) IsPartitionTail(_ bool, _ []byte) bool {
@@ -21,7 +22,7 @@ func (d *audioDepacketizer) IsPartitionHead(_ []byte) bool {
 	return true
 }
 
-// videoDepacketizer is a mixin for video codec depacketizers
+// videoDepacketizer is a mixin for video codec depacketizers.
 type videoDepacketizer struct {
 	zeroAllocation bool
 }
@@ -36,4 +37,15 @@ func (d *videoDepacketizer) IsPartitionTail(marker bool, _ []byte) bool {
 // enabling SetZeroAllocation gives you higher performance at a reduced feature set.
 func (d *videoDepacketizer) SetZeroAllocation(zeroAllocation bool) {
 	d.zeroAllocation = zeroAllocation
+}
+
+// resizeUint16Slice resizes the provided slice to the desired size, or
+// allocates a new slice if needed. The contents are unspecified; the
+// caller must overwrite every element.
+func resizeUint16Slice(s []uint16, desiredSize int) []uint16 {
+	if cap(s) >= desiredSize {
+		return s[:desiredSize]
+	}
+
+	return make([]uint16, desiredSize)
 }
