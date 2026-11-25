@@ -1,6 +1,10 @@
 package main
 
 import (
+	"archive/tar"
+	"archive/zip"
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"flag"
@@ -10,6 +14,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -18,6 +24,11 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
 	"github.com/pion/webrtc/v3"
+)
+
+const (
+	repoOwner = "CyTechNomad"
+	repoName  = "Discord-Audio-Bridge"
 )
 
 var (
@@ -33,10 +44,19 @@ var (
 
 func main() {
 	showVersion := flag.Bool("version", false, "Print version and exit")
+	doUpdate := flag.Bool("update", false, "Update to the latest version")
 	flag.Parse()
 
 	if *showVersion {
 		fmt.Println("discord-audio-bridge", version)
+		os.Exit(0)
+	}
+
+	if *doUpdate {
+		if err := selfUpdate(); err != nil {
+			log.Printf("Update failed: %v", err)
+			os.Exit(1)
+		}
 		os.Exit(0)
 	}
 
@@ -49,6 +69,9 @@ func main() {
 	fmt.Println("║  Mixer:      http://localhost:8080/mixer  ║")
 	fmt.Println("╚═══════════════════════════════════════════╝")
 	fmt.Println()
+
+	// Check for updates in background (non-blocking)
+	go checkForUpdates()
 
 	// Load environment variables from .env file
 	err := godotenv.Load()
@@ -447,4 +470,239 @@ func discordLogin() *discordgo.Session {
 	}
 
 	return dg
+}
+
+// GitHubRelease represents the GitHub API response for a release
+type GitHubRelease struct {
+	TagName string `json:"tag_name"`
+	Assets  []struct {
+		Name               string `json:"name"`
+		BrowserDownloadURL string `json:"browser_download_url"`
+	} `json:"assets"`
+}
+
+// checkForUpdates checks GitHub for a newer version and notifies the user
+func checkForUpdates() {
+	if version == "dev" {
+		return // Skip update check for dev builds
+	}
+
+	latest, err := getLatestRelease()
+	if err != nil {
+		return // Silently fail - don't interrupt startup
+	}
+
+	if latest.TagName != version && latest.TagName > version {
+		fmt.Printf("\n*** New version %s available! Run with -update to upgrade ***\n\n", latest.TagName)
+	}
+}
+
+// getLatestRelease fetches the latest release info from GitHub
+func getLatestRelease() (*GitHubRelease, error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", repoOwner, repoName)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
+	}
+
+	var release GitHubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return nil, err
+	}
+
+	return &release, nil
+}
+
+// selfUpdate downloads and installs the latest version
+func selfUpdate() error {
+	fmt.Println("Checking for updates...")
+
+	latest, err := getLatestRelease()
+	if err != nil {
+		return fmt.Errorf("failed to check for updates: %w", err)
+	}
+
+	if latest.TagName == version {
+		fmt.Println("Already running the latest version:", version)
+		return nil
+	}
+
+	fmt.Printf("Updating from %s to %s...\n", version, latest.TagName)
+
+	// Find the right asset for this platform
+	assetName := getAssetName()
+	var downloadURL string
+	var isZip bool
+	for _, asset := range latest.Assets {
+		if strings.Contains(asset.Name, assetName) {
+			downloadURL = asset.BrowserDownloadURL
+			isZip = strings.HasSuffix(asset.Name, ".zip")
+			break
+		}
+	}
+
+	if downloadURL == "" {
+		return fmt.Errorf("no release found for platform: %s", assetName)
+	}
+
+	fmt.Printf("Downloading %s...\n", downloadURL)
+
+	// Download the archive
+	client := &http.Client{Timeout: 5 * time.Minute}
+	resp, err := client.Get(downloadURL)
+	if err != nil {
+		return fmt.Errorf("failed to download update: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download failed with status %d", resp.StatusCode)
+	}
+
+	// Save archive to temp file
+	archiveData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read download: %w", err)
+	}
+
+	// Extract binary from archive
+	var binaryData []byte
+	binaryName := "discord-audio-bridge"
+	if runtime.GOOS == "windows" {
+		binaryName = "discord-audio-bridge.exe"
+	}
+
+	if isZip {
+		binaryData, err = extractFromZip(archiveData, binaryName)
+	} else {
+		binaryData, err = extractFromTarGz(archiveData, binaryName)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to extract binary: %w", err)
+	}
+
+	// Get current executable path
+	execPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+
+	// Create temp file for new binary
+	tmpFile, err := os.CreateTemp("", "discord-audio-bridge-update-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+
+	// Write binary to temp file
+	_, err = tmpFile.Write(binaryData)
+	tmpFile.Close()
+	if err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to write update: %w", err)
+	}
+
+	// Make executable
+	if err := os.Chmod(tmpPath, 0755); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to set permissions: %w", err)
+	}
+
+	// Replace old binary with new one
+	backupPath := execPath + ".old"
+	os.Remove(backupPath) // Remove any existing backup
+
+	if err := os.Rename(execPath, backupPath); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to backup current binary: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, execPath); err != nil {
+		// Try to restore backup
+		os.Rename(backupPath, execPath)
+		return fmt.Errorf("failed to install update: %w", err)
+	}
+
+	os.Remove(backupPath) // Clean up backup
+
+	fmt.Println("Update successful! Please restart the application.")
+	return nil
+}
+
+// getAssetName returns the expected asset name fragment for the current platform
+func getAssetName() string {
+	goos := runtime.GOOS
+	goarch := runtime.GOARCH
+
+	switch goos {
+	case "windows":
+		return "windows-amd64"
+	case "darwin":
+		if goarch == "arm64" {
+			return "darwin-arm64"
+		}
+		return "darwin-amd64"
+	case "linux":
+		if goarch == "arm64" {
+			return "linux-arm64"
+		}
+		return "linux-amd64"
+	default:
+		return fmt.Sprintf("%s-%s", goos, goarch)
+	}
+}
+
+// extractFromZip extracts a file from a zip archive
+func extractFromZip(data []byte, filename string) ([]byte, error) {
+	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return nil, err
+	}
+
+	for _, file := range reader.File {
+		if strings.HasSuffix(file.Name, filename) {
+			rc, err := file.Open()
+			if err != nil {
+				return nil, err
+			}
+			defer rc.Close()
+			return io.ReadAll(rc)
+		}
+	}
+
+	return nil, fmt.Errorf("file %s not found in archive", filename)
+}
+
+// extractFromTarGz extracts a file from a tar.gz archive
+func extractFromTarGz(data []byte, filename string) ([]byte, error) {
+	gzReader, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	defer gzReader.Close()
+
+	tarReader := tar.NewReader(gzReader)
+
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		if strings.HasSuffix(header.Name, filename) {
+			return io.ReadAll(tarReader)
+		}
+	}
+
+	return nil, fmt.Errorf("file %s not found in archive", filename)
 }
