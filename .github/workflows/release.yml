@@ -27,21 +27,23 @@ jobs:
       - name: Build binaries
         run: |
           mkdir -p dist
+          VERSION=${{ steps.version.outputs.VERSION }}
+          LDFLAGS="-s -w -X main.version=${VERSION}"
 
           # Linux AMD64
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/discord-audio-bridge-linux-amd64
+          GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/discord-audio-bridge-linux-amd64
 
           # Linux ARM64
-          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o dist/discord-audio-bridge-linux-arm64
+          GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/discord-audio-bridge-linux-arm64
 
           # macOS AMD64 (Intel)
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dist/discord-audio-bridge-darwin-amd64
+          GOOS=darwin GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/discord-audio-bridge-darwin-amd64
 
           # macOS ARM64 (Apple Silicon)
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/discord-audio-bridge-darwin-arm64
+          GOOS=darwin GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/discord-audio-bridge-darwin-arm64
 
           # Windows AMD64
-          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o dist/discord-audio-bridge-windows-amd64.exe
+          GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/discord-audio-bridge-windows-amd64.exe
 
       - name: Create archives
         run: |

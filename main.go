@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -20,6 +21,7 @@ import (
 )
 
 var (
+	version     = "dev"
 	cancelFuncs []context.CancelFunc
 	cancelMutex sync.Mutex
 	upgrader    = websocket.Upgrader{
@@ -30,6 +32,14 @@ var (
 )
 
 func main() {
+	showVersion := flag.Bool("version", false, "Print version and exit")
+	flag.Parse()
+
+	if *showVersion {
+		fmt.Println("discord-audio-bridge", version)
+		os.Exit(0)
+	}
+
 	// Load environment variables from .env file
 	err := godotenv.Load()
 	if err != nil {
