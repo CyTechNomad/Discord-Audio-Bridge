@@ -201,8 +201,9 @@
             }
 
             // Create audio context with the sample rate Discord expects
-            audioContext = new (window.AudioContext ||
-              window.webkitAudioContext)({
+            audioContext = new (
+              window.AudioContext || window.webkitAudioContext
+            )({
               sampleRate: 48000, // Discord uses 48kHz audio
             });
 

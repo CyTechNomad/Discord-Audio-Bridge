@@ -89,6 +89,24 @@ The server runs on port 8080 by default and provides:
 - WebRTC signaling via WebSocket at `/rtc`
 - YouTube API key endpoint at `/api/youtube-key` (if configured)
 
+## Contributing
+
+This project uses [just](https://github.com/casey/just) as a command runner. Available commands:
+
+```bash
+just format   # Format all code (Go, HTML, YAML)
+just build    # Build the application
+just run      # Run the application
+just deps     # Update dependencies
+just clean    # Clean build artifacts
+```
+
+To format code before committing:
+
+```bash
+just format
+```
+
 ## Acknowledgements
 
 - [discordgo](https://github.com/bwmarrin/discordgo) - Discord API wrapper
