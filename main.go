@@ -59,13 +59,16 @@ func main() {
 
 	// Validate required environment variables
 	missingVars := []string{}
-	if os.Getenv("DISCORD_BOT_TOKEN") == "" {
+	token := os.Getenv("DISCORD_BOT_TOKEN")
+	if token == "" || token == "your_discord_bot_token" {
 		missingVars = append(missingVars, "DISCORD_BOT_TOKEN")
 	}
-	if os.Getenv("DISCORD_GUILD_ID") == "" {
+	guildID := os.Getenv("DISCORD_GUILD_ID")
+	if guildID == "" || guildID == "your_discord_guild_id" {
 		missingVars = append(missingVars, "DISCORD_GUILD_ID")
 	}
-	if os.Getenv("DISCORD_CHANNEL_ID") == "" {
+	channelID := os.Getenv("DISCORD_CHANNEL_ID")
+	if channelID == "" || channelID == "your_discord_channel_id" {
 		missingVars = append(missingVars, "DISCORD_CHANNEL_ID")
 	}
 	if len(missingVars) > 0 {
