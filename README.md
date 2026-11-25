@@ -58,6 +58,8 @@ Each release includes:
 3. Edit `.env` with your Discord bot token and channel IDs
 4. Run `start.sh` (Linux/macOS) or `start.bat` (Windows)
 
+> **Windows Users:** You may see a SmartScreen warning since the binary isn't signed. Click "More info" → "Run anyway" to proceed.
+
 ### From Source
 
 1. Clone the repository:
