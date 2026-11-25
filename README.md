@@ -13,33 +13,38 @@ This application creates a bridge between WebRTC audio streams and Discord voice
 ## Features
 
 - WebRTC audio capture from browser
-- Discord voice channel integration
+- Discord voice channel integration with DAVE (E2EE) protocol support
 - Automatic Opus codec handling
 - Web-based control interface
+- YouTube audio mixer with search and playlist support
 
 ## Requirements
 
-- Go 1.16+
-- Discord Bot with proper permissions
+- Go 1.26+
+- Discord Bot with proper permissions (Connect, Speak)
 - STUN server access (defaults to Google's public STUN server)
 
 ## Environment Variables
 
-Create a `.env` file in the project root with the following variables:
+Copy the example environment file and fill in your values:
 
+```bash
+cp .env.example .env
 ```
-DISCORD_BOT_TOKEN=your_discord_bot_token
-DISCORD_GUILD_ID=your_discord_server_id
-DISCORD_CHANNEL_ID=your_voice_channel_id
-YOUTUBE_API_KEY=your_youtube_api_key (optional)
-```
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `DISCORD_BOT_TOKEN` | Your Discord bot token | Yes |
+| `DISCORD_GUILD_ID` | Discord server ID | Yes |
+| `DISCORD_CHANNEL_ID` | Voice channel ID | Yes |
+| `YOUTUBE_API_KEY` | YouTube Data API key | No |
 
 ## Installation
 
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/yourusername/discord-audio-bridge.git
+   git clone https://github.com/CyTechNomad/discord-audio-bridge.git
    cd discord-audio-bridge
    ```
 
@@ -68,6 +73,12 @@ YOUTUBE_API_KEY=your_youtube_api_key (optional)
    http://localhost:8080
    ```
 
+   Or for the YouTube mixer:
+
+   ```
+   http://localhost:8080/mixer.html
+   ```
+
 3. Grant permissions to capture tab audio in your browser and begin streaming to Discord
 
 ## Development
@@ -81,5 +92,6 @@ The server runs on port 8080 by default and provides:
 ## Acknowledgements
 
 - [discordgo](https://github.com/bwmarrin/discordgo) - Discord API wrapper
+- [yeongaori/discordgo](https://github.com/yeongaori/discordgo) - DAVE (E2EE) protocol support
 - [Pion WebRTC](https://github.com/pion/webrtc) - WebRTC implementation
 - [Gorilla WebSocket](https://github.com/gorilla/websocket) - WebSocket implementation
