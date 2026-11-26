@@ -24,6 +24,21 @@ This application creates a bridge between WebRTC audio streams and Discord voice
 - Discord Bot with proper permissions (Connect, Speak)
 - STUN server access (defaults to Google's public STUN server)
 
+### Supported Browsers
+
+Tab audio capture requires a Chromium-based browser:
+
+| Browser | Supported | Notes |
+|---------|-----------|-------|
+| Chrome | ✅ | Recommended |
+| Edge | ✅ | |
+| Brave | ✅ | |
+| Opera | ✅ | |
+| Firefox | ❌ | No tab audio capture support |
+| Safari | ❌ | No tab audio capture support |
+
+> **Note:** When sharing a tab, make sure to check "Share tab audio" in the browser dialog.
+
 ## Environment Variables
 
 Copy the example environment file and fill in your values:
