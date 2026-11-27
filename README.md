@@ -4,7 +4,7 @@ A WebRTC to Discord audio bridge that allows you to stream audio from a web inte
 
 ## Description
 
-This application creates a bridge between WebRTC audio streams and Discord voice channels. It enables:
+This is a BYOB (Bring Your Own Bot) application that creates a bridge between WebRTC audio streams and Discord voice channels. It enables:
 
 - Real-time audio forwarding from a web browser to Discord
 - Seamless Opus audio codec compatibility
